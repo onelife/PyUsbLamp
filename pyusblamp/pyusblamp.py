@@ -51,7 +51,16 @@ class USBLamp(object):
          print("USBLamp Error: %d VS. %d" % (ret, len(bytes)));
    
    def __init__(self):
-      backend = usb.backend.libusb1.get_backend(find_library=lambda x: "C:/Users/Gang/Downloads/libusb-1.0.21/MS32/dll/libusb-1.0.dll")
+      import sys
+      if sys.platform != 'win32':
+         raise NotImplementedError('Currently, only MS Windows is supported!')
+         
+      from os import path
+      backend = usb.backend.libusb1.get_backend(find_library=lambda x: path.join(
+         path.dirname(__file__), 
+         'libusb', 
+         'MS' + sys.winver.split('-')[1], 
+         'dll', 'libusb-1.0.dll'))
       
       self.led_type = None
       self.lamp  = None
@@ -107,7 +116,9 @@ class USBLamp(object):
          sleep(delay / 1000)
          setColor(newColor)
      
-     
-l = USBLamp()
-print l.getColor()
-l.fading(1, (0x40, 0x40, 0x40))
+
+def main():
+   l = USBLamp()
+   print l.getColor()
+   l.fading(1, (0x40, 0x40, 0x40))
+   

@@ -1,0 +1,7 @@
+#libusb
+recursive-include pyusblamp/libusb *
+
+#Misc
+include README.md
+include LICENSE
+include pyusblamp/libusb/README.md
