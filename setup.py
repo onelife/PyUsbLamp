@@ -1,9 +1,10 @@
 from setuptools import setup
+import pyusblamp
 
 setup(
    name = 'pyusblamp',
    packages = ['pyusblamp'],
-   version = '0.15',
+   version = pyusblamp.__version__,
    description = 'Mailbox Friends Alert (Dream Cheeky) Driver',
    license='GPLv3',
    install_requires=['pyusb',],
@@ -39,6 +40,7 @@ setup(
    entry_points={
       'console_scripts': [
          'pyusblamp = pyusblamp:main',
+         'imap2usblamp = pyusblamp:imap2usblamp',
       ],
    }
 )

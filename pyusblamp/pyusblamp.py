@@ -1,9 +1,8 @@
 # Project: PyUsbLamp
 # Author: onelife
 
-from optparse import OptionParser
 from time import sleep
-from queue import Queue, Empty
+from Queue import Queue, Empty
 from threading import Thread
 
 import usb.core
@@ -133,6 +132,9 @@ class USBLamp(object):
             if DEBUG: print("USBLamp: idVendor %d, idProduct %d" % (self.ID_VENDOR_2, self.ID_PRODUCT_2))
          break
       if DEBUG: print("USBLamp: LED Type is %d" % (self.led_type))
+      
+      if not devs:
+         raise SystemError('No device found!')
       self.lamp = devs[0]
 
       # send init cmd
@@ -169,13 +171,13 @@ class USBLamp(object):
      
 
 def main():
-   l = USBLamp()
-   print l.getColor()
-   l.setFading(1.0/200, (0x40, 0x40, 0x40))
+   usblamp = USBLamp()
+   print usblamp.getColor()
+   usblamp.setFading(1.0/200, (0x40, 0x40, 0x40))
    sleep(10)
-   l.setFading(0, (0x0, 0x0, 0x40))
+   usblamp.setFading(0, (0x0, 0x0, 0x40))
    sleep(1)
-   l.setFading(1.0/400, (0x0, 0x0, 0x40))
+   usblamp.setFading(1.0/400, (0x0, 0x0, 0x40))
    sleep(10)
-   l.setFading(0, (0x0, 0x40, 0x0))
+   usblamp.setFading(0, (0x0, 0x40, 0x0))
    
