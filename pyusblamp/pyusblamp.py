@@ -7,6 +7,7 @@ from threading import Thread
 
 import usb.core
 import usb.backend.libusb1
+from usb.core import USBError
 
 DEBUG = 0
 STEPS = 32
@@ -35,13 +36,13 @@ def getSteps(maxValue, steps):
    return x
 
 def fading(lamp):
-   print 'fading thread start'
+   if DEBUG: print('USBLamp: fading thread started.')
    step = 0
    dir = 1
    idle = True
    while True:
       try:
-         delay, newColor = lamp.queue.get(block=idle)
+         delay, newColor = lamp.task.get(block=idle)
          if delay <= 0: 
             idle = True
             if newColor is not None:
@@ -65,7 +66,6 @@ def fading(lamp):
             dir = -dir
       elif lamp.led_type == 2:
          setColor(newColor)
-   print 'fading thread exit'
 
 
 class USBLamp(object):
@@ -76,22 +76,24 @@ class USBLamp(object):
    ID_VENDOR_2    = 0x1294
    ID_PRODUCT_2   = 0x1320
    RGB_MAX        = 0x40
+   error          = None
 
    def send(self, bytes):
-      # int result = 0;
-      # int timeout = 1000;    // ms
-
-      if self.led_type == 1:
-         if DEBUG: print("USBLamp: send(%d) %02X %02X %02X %02X %02X %02X %02X %02X" % (len(bytes), bytes[0], bytes[1], bytes[2], bytes[3], bytes[4], bytes[5] ,bytes[6], bytes[7]))
-         # requesttype = USB_TYPE_CLASS | USB_RECIP_INTERFACE
-         # request = USB_REQ_SET_CONFIGURATION
-         # value = 0x200
-         # index = 0x00
-         # timeout = 1000
-         ret = self.lamp.ctrl_transfer(0x21, 0x09, 0x200, 0x00, bytes, 1000)
-      elif self.led_type == 2:
-         if DEBUG: print("USBLamp: send(%d) %02X %02X %02X %02X %02X" % (len(bytes), bytes[0], bytes[1], bytes[2], bytes[3], bytes[4]))
-         ret = self.lamp.write(0x02, bytes, 1000)
+      try:
+         if self.led_type == 1:
+            if DEBUG: print("USBLamp: send(%d) %02X %02X %02X %02X %02X %02X %02X %02X" % (len(bytes), bytes[0], bytes[1], bytes[2], bytes[3], bytes[4], bytes[5] ,bytes[6], bytes[7]))
+            # requesttype = USB_TYPE_CLASS | USB_RECIP_INTERFACE
+            # request = USB_REQ_SET_CONFIGURATION
+            # value = 0x200
+            # index = 0x00
+            # timeout = 1000
+            ret = self.lamp.ctrl_transfer(0x21, 0x09, 0x200, 0x00, bytes, 1000)
+         elif self.led_type == 2:
+            if DEBUG: print("USBLamp: send(%d) %02X %02X %02X %02X %02X" % (len(bytes), bytes[0], bytes[1], bytes[2], bytes[3], bytes[4]))
+            ret = self.lamp.write(0x02, bytes, 1000)
+      except USBError as e:
+         USBLamp.error = e
+         raise
 
       if (ret != len(bytes)):
          print("USBLamp Error: %d VS. %d" % (ret, len(bytes)));
@@ -112,7 +114,7 @@ class USBLamp(object):
       self.led_type = -1
       self.lamp  = None
       self.color = (0, 0, 0)
-      self.queue = Queue()
+      self.task = Queue()
       
       # get device
       while True:
@@ -163,7 +165,7 @@ class USBLamp(object):
    def setFading(self, delay, newColor):
       self.color = newColor
       if DEBUG: print("USBLamp: Set fading %f,%s" % (delay, str(self.color)));
-      self.queue.put((delay, newColor))
+      self.task.put((delay, newColor))
 
    def switchOff(self):
       self.setColor((0,0,0));

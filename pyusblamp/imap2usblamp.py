@@ -50,10 +50,63 @@ class Imap2UsbLamp(object):
          self.config[section]['host'] = raw_input('Host: ').strip()
          self.config[section]['mailbox'] = raw_input('Mailbox: ').strip()
          self.config[section]['username'] = raw_input('Username: ').strip()
-         self.config[section]['password'] = getpass.getpass()
-         self.config[section]['interval'] = raw_input('Refresh interval (in minutes): ').strip()
-         self.config[section]['color'] = raw_input('LED color in RR,GG,BB (0~64): ').strip()
-         self.config[section]['delay'] = raw_input('Fading delay (0 for no fading): ').strip()
+         # Oauth2
+         while True:
+            oauth = raw_input('Oauth2 (y/n): ').lower().strip()
+            if oauth not in ['y', 'n']:
+               print('Please enter "y" or "n" only.')
+            else:
+               break
+         if oauth == 'n':
+            self.config[section]['password'] = getpass.getpass()
+         else:
+            from oauth2 import GeneratePermissionUrl, AuthorizeTokens
+            import webbrowser
+            clientId = raw_input('Client ID: ').strip()
+            secret = raw_input('Client secret: ').strip()
+            print('\nWeb brower will open soon. Please click "Allow access" and copy the verification code.\n')
+            url = GeneratePermissionUrl(clientId)
+            webbrowser.open(url, new=2)
+            code = raw_input('Verification Code: ').strip()
+            token = AuthorizeTokens(clientId, secret, code)
+            if DEBUG: print("IMAP: Refresh Token: %s" % (token['refresh_token']))
+            if DEBUG: print("IMAP: Access Token: %s" % (token['access_token']))
+            if DEBUG: print("IMAP: Access Token Expiration Seconds: %s" % (token['expires_in']))
+            self.config[section]['clientId'] = clientId
+            self.config[section]['secret'] = secret
+            self.config[section]['token'] = token
+         # interval
+         while True:
+            try:
+               self.config[section]['interval'] = int(raw_input('Refresh interval (in minutes): '))
+               break
+            except:
+               print('\nPlease enter an integer.\n')
+         # color
+         while True:
+            color  = raw_input('LED color in RR,GG,BB (0~%d): ' % (USBLamp.RGB_MAX)).strip(',')
+            done = 0
+            try:
+               for i in color.split(','):
+                  i = int(i)
+                  if 0 <= i <= USBLamp.RGB_MAX:
+                     done += 1
+                  else:
+                     break
+            except:
+               pass
+            if done == 3:
+               self.config[section]['color'] = '(' + color + ')'
+               break
+            else:
+               print('\nPlease enter 3 integers (0~%d) separate by ",".\n' % (USBLamp.RGB_MAX))
+         # delay
+         while True:
+            try:
+               self.config[section]['delay'] = float(eval('1.0*' + raw_input('Fading delay (0 for no fading): ')))
+               break
+            except:
+               print('\nPlease enter a floating number.\n')
          
          if self.parser.has_option(IMAP_SECTION, 'Services'):
             try:
@@ -73,39 +126,63 @@ class Imap2UsbLamp(object):
 
    @staticmethod
    def checkUnseen(name, imap, usblamp, loop=False):
-      while True:
-         mailbox = imaplib.IMAP4_SSL(imap['host'])
-         mailbox.login(imap['username'], imap['password'])
-         unseen = 0
-         
-         typ, data = mailbox.status(imap['mailbox'],'(Messages UnSeen)')
-         if typ == 'OK':
-            total, unseen = re.search('Messages\s+(\d+)\s+UnSeen\s+(\d+)', data[0], re.I).groups()
-            unseen = int(unseen)
-            if DEBUG: print("IMAP: %s messages and %s unseen" % (total, unseen))
+      from time import time
+      # refresh token
+      if imap.has_key('token'):
+         def refreshToken():
+            from oauth2 import RefreshToken
+            imap['token'] = eval(imap['token'])
+            imap['token'] = RefreshToken(imap['clientid'], imap['secret'], imap['token']['refresh_token'])
+            return time() + float(imap['token']['expires_in']) - 1
+         expiryTime = refreshToken()
 
+      # preprocess
+      delay = float(imap['delay'])
+      color = eval(imap['color'])
+      # process
+      while True:
+         # access imap
+         unseen = 0
+         mailbox = imaplib.IMAP4_SSL(imap['host'])
+         # mailbox.debug = 4
+         if imap.has_key('token'):
+            if time() > expiryTime:
+               expiryTime = refreshToken()
+            from oauth2 import GenerateOAuth2String
+            auth_string = GenerateOAuth2String(imap['username'], imap['token']['access_token'], False)
+            mailbox.authenticate('XOAUTH2', lambda x: auth_string)
+         else:
+            mailbox.login(imap['username'], imap['password'])
+         
+         if imap.has_key('search'):
+            mailbox.select(imap['mailbox'])
+            typ, data = mailbox.search(None, imap['search'])
+            if typ == 'OK':
+               unseen = len(data[0].split())
+               if DEBUG: print("IMAP: %s: %d messages match '%s'" % (imap['username'], unseen, imap['search']))
+         else:
+            typ, data = mailbox.status(imap['mailbox'],'(Messages UnSeen)')
+            if typ == 'OK':
+               total, unseen = re.search('Messages\s+(\d+)\s+UnSeen\s+(\d+)', data[0], re.I).groups()
+               unseen = int(unseen)
+               if DEBUG: print("IMAP: %s: %s messages and %s unseen" % (imap['username'], total, unseen))
+
+         # control usblamp
          if unseen:
-            try:
-               delay = float(eval(imap['delay']))
-               color = eval('(' + imap['color'] + ')')
-               if delay:
-                  usblamp.setFading(delay, color)
-               else:
-                  usblamp.setFading(delay, color)
-            except:
-               raise SystemError('Bad LED setting in config %s!' % (name))
+            if delay:
+               usblamp.setFading(delay, color)
+            else:
+               usblamp.setFading(delay, color)
          else:
             usblamp.switchOff()
-
+            
          mailbox.logout()
          
          if not loop:
             break
-         try:
-            interval = float(imap['interval'])
-            sleep(interval)
-         except:
-            raise SystemError('Bad refresh interval setting in config %s!' % (name))
+         sleep(float(imap['interval']))
+         if usblamp.error:
+            break
       
 
 def imap2usblamp():
@@ -145,10 +222,10 @@ def imap2usblamp():
    while True:
       try:
          sleep(60)
+         if USBLamp.error:
+            raise USBLamp.error
       except (KeyboardInterrupt, SystemExit):
          usblamp.switchOff()
          exit()
 
-
-imap2usblamp()
    
