@@ -39,7 +39,6 @@ setup(
    
    entry_points={
       'console_scripts': [
-         'pyusblamp = pyusblamp:main',
          'imap2usblamp = pyusblamp:imap2usblamp',
       ],
    }

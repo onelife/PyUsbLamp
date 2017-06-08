@@ -106,7 +106,7 @@ class USBLamp(object):
       from os import path
       import re
       backend = usb.backend.libusb1.get_backend(find_library=lambda x: path.join(
-         path.abspath(path.dirname(__file__)), 
+         path.dirname(__file__),
          'libusb', 
          'MS' + re.search('(\d+) bit', sys.version).groups()[0], 
          'dll', 'libusb-1.0.dll'))
@@ -169,17 +169,3 @@ class USBLamp(object):
 
    def switchOff(self):
       self.setColor((0,0,0));
-     
-     
-
-def main():
-   usblamp = USBLamp()
-   print usblamp.getColor()
-   usblamp.setFading(1.0/200, (0x40, 0x40, 0x40))
-   sleep(10)
-   usblamp.setFading(0, (0x0, 0x0, 0x40))
-   sleep(1)
-   usblamp.setFading(1.0/400, (0x0, 0x0, 0x40))
-   sleep(10)
-   usblamp.setFading(0, (0x0, 0x40, 0x0))
-   

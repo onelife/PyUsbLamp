@@ -11,7 +11,7 @@ from sys import exit
 import imaplib
 from pyusblamp import USBLamp
 
-DEBUG = 1
+DEBUG = 0
 IMAP_SECTION = 'IMAP_LIST'
 
 
@@ -144,7 +144,7 @@ class Imap2UsbLamp(object):
          # access imap
          unseen = 0
          mailbox = imaplib.IMAP4_SSL(imap['host'])
-         # mailbox.debug = 4
+         if DEBUG > 1: mailbox.debug = 4
          if imap.has_key('token'):
             if time() > expiryTime:
                expiryTime = refreshToken()
