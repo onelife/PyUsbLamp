@@ -13,7 +13,7 @@ setup(
    author_email = 'onelife.real[AT]gmail.com',
    
    url = 'https://github.com/onelife/PyUsbLamp',
-   download_url = 'https://github.com/onelife/PyUsbLamp/archive/0.1.tar.gz',
+   download_url = 'https://github.com/onelife/PyUsbLamp/archive/%s.tar.gz' % (pyusblamp.__version__),
    
    keywords = ['usblamp', 'usb', 'lamp', 'mailbox', 'alert', 'driver'],
    classifiers = [
