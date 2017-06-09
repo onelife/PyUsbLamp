@@ -10,18 +10,22 @@ from sys import exit
 
 import imaplib
 from pyusblamp import USBLamp
+from applog import AppLog
 
 DEBUG = 0
+CONFIG_FILE_NAME = '.pyusblamp'
 IMAP_SECTION = 'IMAP_LIST'
+LogMsg = AppLog().Message
 
 
 class Imap2UsbLamp(object):
    def __init__(self):
+      self.log = DEBUG
       self.getConfig()
 
    def getConfig(self):
       from os import path
-      self.cfgPath = path.expanduser(path.join('~', '.pyusblamp'))
+      self.cfgPath = path.expanduser(path.join('~', CONFIG_FILE_NAME))
       self.parser = RawConfigParser()
       if path.exists(self.cfgPath):
          self.parser.read(self.cfgPath) 
@@ -33,12 +37,12 @@ class Imap2UsbLamp(object):
       if self.parser.has_option(IMAP_SECTION, 'Services'):
          try:
             services = eval(self.parser.get(IMAP_SECTION, 'Services'))
-            if DEBUG: print("IMAP: Service = %s" % (str(services)))
+            if self.log: LogMsg("IMAP: Service = %s" % (str(services)), DEBUG)
             for s in services:
                self.config[s] = {}
                for k in self.parser.options(s):
                   self.config[s][k] = self.parser.get(s, k)
-               if DEBUG: print("IMAP: %s = %s" % (s, str(self.config[s])))
+               if self.log: LogMsg("IMAP: %s = %s" % (s, str(self.config[s])), DEBUG)
          except:
             self.config = {}
 
@@ -69,9 +73,9 @@ class Imap2UsbLamp(object):
             webbrowser.open(url, new=2)
             code = raw_input('Verification Code: ').strip()
             token = AuthorizeTokens(clientId, secret, code)
-            if DEBUG: print("IMAP: Refresh Token: %s" % (token['refresh_token']))
-            if DEBUG: print("IMAP: Access Token: %s" % (token['access_token']))
-            if DEBUG: print("IMAP: Access Token Expiration Seconds: %s" % (token['expires_in']))
+            if self.log: LogMsg("IMAP: Refresh Token: %s" % (token['refresh_token']), DEBUG)
+            if self.log: LogMsg("IMAP: Access Token: %s" % (token['access_token']), DEBUG)
+            if self.log: LogMsg("IMAP: Access Token Expiration Seconds: %s" % (token['expires_in']), DEBUG)
             self.config[section]['clientId'] = clientId
             self.config[section]['secret'] = secret
             self.config[section]['token'] = token
@@ -125,7 +129,7 @@ class Imap2UsbLamp(object):
             print('IMAP: Config file %s saved.' % (self.cfgPath))
 
    @staticmethod
-   def checkUnseen(name, imap, usblamp, loop=False):
+   def checkUnseen(name, imap, usblamp, log, loop=False):
       from time import time
       # refresh token
       if imap.has_key('token'):
@@ -159,13 +163,13 @@ class Imap2UsbLamp(object):
             typ, data = mailbox.search(None, imap['search'])
             if typ == 'OK':
                unseen = len(data[0].split())
-               if DEBUG: print("IMAP: %s: %d messages match '%s'" % (imap['username'], unseen, imap['search']))
+               if log: LogMsg("IMAP: %s: %d messages match '%s'" % (imap['username'], unseen, imap['search']), DEBUG)
          else:
             typ, data = mailbox.status(imap['mailbox'],'(Messages UnSeen)')
             if typ == 'OK':
                total, unseen = re.search('Messages\s+(\d+)\s+UnSeen\s+(\d+)', data[0], re.I).groups()
                unseen = int(unseen)
-               if DEBUG: print("IMAP: %s: %s messages and %s unseen" % (imap['username'], total, unseen))
+               if log: LogMsg("IMAP: %s: %s messages and %s unseen" % (imap['username'], total, unseen), DEBUG)
 
          # control usblamp
          if unseen:
@@ -187,15 +191,18 @@ class Imap2UsbLamp(object):
 
 def imap2usblamp():
    # options
-   parser = OptionParser(usage="usage: %prog [--add | --show]")
+   parser = OptionParser(usage="usage: %prog [--add | --show | --log]")
    parser.add_option("-a", "--add", action="store_true", dest="add", default = False, help='Add an IMAP config')
    parser.add_option("-s", "--show", action="store_true", dest="show", default = False, help='Show current IMAP config')
+   parser.add_option("-l", "--log", action="store_true", dest="log", default = False, help='Enable application log')
    (options, _) = parser.parse_args()
+   options.log = options.log and 1 or 0
 
    if DEBUG: print("IMAP: options %s" % (options))
    
    done = False
    imap = Imap2UsbLamp()
+   imap.log = options.log
    
    if not imap.config:
       imap.addConfig('IMAP_1')
@@ -214,8 +221,9 @@ def imap2usblamp():
    if done: exit()
    
    usblamp = USBLamp()
+   usblamp.log = options.log
    for k, v in imap.config.items():
-      t = Thread(target=imap.checkUnseen, args=(k, v, usblamp, True))
+      t = Thread(target=imap.checkUnseen, args=(k, v, usblamp, options.log, True))
       t.daemon = True
       t.start()
       
