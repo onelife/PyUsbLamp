@@ -38,20 +38,22 @@ def getSteps(maxValue, steps):
       x.extend([maxValue] * (steps - len(x)))
    return x
 
-def fading(lamp):
-   if DEBUG: print('USBLamp: fading thread started.')
+def fading(usblamp):
    step = 0
    dir = 1
    idle = True
    while True:
+      if usblamp.__class__.error: 
+         break
+         # raise usblamp.__class__.error
       try:
-         delay, newColor = lamp.task.get(block=idle)
+         delay, newColor = usblamp.task.get(block=idle)
          if delay <= 0: 
             idle = True
             if newColor is not None:
-               lamp.setColor(newColor)
+               usblamp.setColor(newColor)
             continue
-         elif lamp.led_type == 1:
+         elif usblamp.led_type == 1:
             idle = False
             r = getSteps(newColor[0], STEPS)
             g = getSteps(newColor[1], STEPS)
@@ -61,13 +63,13 @@ def fading(lamp):
          pass
       
       sleep(delay)
-      if lamp.led_type == 1:
+      if usblamp.led_type == 1:
          # Do fading
-         lamp.setColor(state[step])
+         usblamp.setColor(state[step])
          step += dir
          if step == STEPS - 1 or step == 0:
             dir = -dir
-      elif lamp.led_type == 2:
+      elif usblamp.led_type == 2:
          setColor(newColor)
 
 
@@ -95,11 +97,11 @@ class USBLamp(object):
             if self.log: LogMsg("USBLamp: send(%d) %02X %02X %02X %02X %02X" % (len(bytes), bytes[0], bytes[1], bytes[2], bytes[3], bytes[4]), DEBUG)
             ret = self.lamp.write(0x02, bytes, 1000)
       except USBError as e:
-         USBLamp.error = e
+         self.__class__.error = e
          raise
 
       if (ret != len(bytes)):
-         print("USBLamp Error: %d VS. %d" % (ret, len(bytes)));
+         print("USBLamp Error: %d VS. %d" % (ret, len(bytes)))
    
    def __init__(self):
       import sys
@@ -150,16 +152,15 @@ class USBLamp(object):
          self.send((0x00, 0x02, 0x00, 0x2e, 0x00, 0x00, 0x2b, 0x05))
          
       # create thread for fading
-      t = Thread(target=fading, args=(self, ))
-      t.daemon = True
-      t.start()
+      self.t = Thread(target=fading, args=(self, ))
+      self.t.start()
             
    def getColor(self):
       return self.color
       
    def setColor(self, newColor):
       self.color = newColor
-      if self.log: LogMsg("USBLamp: Set color %s" % str(self.color), DEBUG);
+      if self.log: LogMsg("USBLamp: Set color %s" % str(self.color), DEBUG)
 
       if self.led_type == 1:
          self.send(self.color + (0x00, 0x00, 0x00, 0x00, 0x05))
@@ -168,8 +169,14 @@ class USBLamp(object):
          
    def setFading(self, delay, newColor):
       self.color = newColor
-      if self.log: LogMsg("USBLamp: Set fading %f,%s" % (delay, str(self.color)), DEBUG);
+      if self.log: LogMsg("USBLamp: Set fading %f,%s" % (delay, str(self.color)), DEBUG)
       self.task.put((delay, newColor))
 
    def switchOff(self):
-      self.setColor((0,0,0));
+      self.setColor((0,0,0))
+      
+   def exit(self):
+      self.__class__.error = SystemExit('USBLamp exit.')
+      self.setFading(0, (0, 0, 0))
+      self.t.join()
+      if self.log: LogMsg("USBLamp: Fading thread exited.", DEBUG)
