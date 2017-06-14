@@ -1,6 +1,7 @@
 # Project: PyUsbLamp
 # Author: onelife
 
+import sys
 from time import sleep
 from queue import Queue, Empty
 from threading import Thread
@@ -9,7 +10,10 @@ import usb.core
 import usb.backend.libusb1
 from usb.core import USBError
 
-from applog import AppLog
+if sys.version_info >= (3, ):
+   from .applog import AppLog
+else:
+   from applog import AppLog
 
 DEBUG = 0
 STEPS = 32
@@ -30,7 +34,7 @@ RISO_KAGAKU_IX = lambda r, g, b: riso_kagaku_tbl[(r and 1 or 0)+(g and 2 or 0)+(
 
 
 def getSteps(maxValue, steps):
-   x = range(0, maxValue + 1, max(1, maxValue / (steps - 1)))
+   x = list(range(0, maxValue + 1, max(1, int(maxValue / (steps - 1)))))
    if len(x) >= steps:
       x = x[:steps - 1]
       x.append(maxValue)
@@ -58,7 +62,7 @@ def fading(usblamp):
             r = getSteps(newColor[0], STEPS)
             g = getSteps(newColor[1], STEPS)
             b = getSteps(newColor[2], STEPS)
-            state = zip(r, g, b)
+            state = list(zip(r, g, b))
       except Empty:
          pass
       
@@ -104,7 +108,6 @@ class USBLamp(object):
          print("USBLamp Error: %d VS. %d" % (ret, len(bytes)))
    
    def __init__(self):
-      import sys
       if sys.platform != 'win32':
          raise NotImplementedError('Currently, only MS Windows is supported!')
          

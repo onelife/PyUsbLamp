@@ -2,16 +2,26 @@
 # Author: onelife
 
 from optparse import OptionParser
-from ConfigParser import RawConfigParser
+from configparser import RawConfigParser
 from queue import Queue, Empty
 from threading import Thread, Timer
+import sys
 import re
 from time import sleep
-from sys import exit
 
 import imaplib
-from pyusblamp import USBLamp
-from applog import AppLog
+
+if sys.version_info >= (3, ):
+   from .pyusblamp import USBLamp, USBError
+   from .applog import AppLog
+   raw_input = input
+   encode = lambda x: x.encode("utf-8")
+   decode = lambda x: x.decode("utf-8")
+else:
+   from pyusblamp import USBLamp, USBError
+   from applog import AppLog
+   encode = lambda x: x
+   decode = lambda x: x
 
 DEBUG = 0
 CONFIG_FILE_NAME = '.pyusblamp'
@@ -64,7 +74,10 @@ class Imap2UsbLamp(object):
             else:
                break
          if oauth == 'y':
-            from oauth2 import GeneratePermissionUrl, AuthorizeTokens
+            if sys.version_info >= (3, ):
+               from .oauth2 import GeneratePermissionUrl, AuthorizeTokens
+            else:
+               from oauth2 import GeneratePermissionUrl, AuthorizeTokens
             import webbrowser
             clientId = raw_input('Client ID: ').strip()
             secret = raw_input('Client secret: ').strip()
@@ -125,16 +138,18 @@ class Imap2UsbLamp(object):
             self.parser.set(section, k, v)
          with open(self.cfgPath, 'wb') as f:
             self.parser.write(f)
-            print
-            print('IMAP: Config file %s saved.' % (self.cfgPath))
+            print('\nIMAP: Config file %s saved.' % (self.cfgPath))
 
    @staticmethod
    def checkUnseen(name, config, usblamp, log, queue=None, loop=False):
       from time import time
       # refresh token
-      if config.has_key('token'):
+      if config.get('token'):
          def refreshToken():
-            from oauth2 import RefreshToken
+            if sys.version_info >= (3, ):
+               from .oauth2 import RefreshToken
+            else:
+               from oauth2 import RefreshToken
             config['token'] = eval(config['token'])
             config['token'] = RefreshToken(config['clientid'], config['secret'], config['token']['refresh_token'])
             return time() + float(config['token']['expires_in']) - 1
@@ -143,7 +158,7 @@ class Imap2UsbLamp(object):
       # preprocess
       delay = float(config['delay'])
       color = eval(config['color'])
-      waitPwd = not config.has_key('token') and queue
+      waitPwd = not config.get('token') and queue
       pwd = waitPwd and '' or config.get('password', '')
       # process
       while True:
@@ -151,10 +166,13 @@ class Imap2UsbLamp(object):
          unseen = 0
          mailbox = imaplib.IMAP4_SSL(config['host'])
          if DEBUG > 1: mailbox.debug = 4
-         if config.has_key('token'):
+         if config.get('token'):
             if time() > expiryTime:
                expiryTime = refreshToken()
-            from oauth2 import GenerateOAuth2String
+            if sys.version_info >= (3, ):
+               from .oauth2 import GenerateOAuth2String
+            else:
+               from oauth2 import GenerateOAuth2String
             auth_string = GenerateOAuth2String(config['username'], config['token']['access_token'], False)
             mailbox.authenticate('XOAUTH2', lambda x: auth_string)
          elif not waitPwd:
@@ -173,9 +191,12 @@ class Imap2UsbLamp(object):
                queue[1].put('Wrong password!')
             except:
                queue[1].put('Unknown error!')
+            if usblamp.__class__.error:
+               if log: LogMsg("IMAP: CheckUnseen thread exited.", DEBUG)
+               break
          
          if not waitPwd:
-            if config.has_key('search'):
+            if config.get('search'):
                mailbox.select(config['mailbox'])
                typ, data = mailbox.search(None, config['search'])
                if typ == 'OK':
@@ -184,7 +205,7 @@ class Imap2UsbLamp(object):
             else:
                typ, data = mailbox.status(config['mailbox'],'(Messages UnSeen)')
                if typ == 'OK':
-                  total, unseen = re.search('Messages\s+(\d+)\s+UnSeen\s+(\d+)', data[0], re.I).groups()
+                  total, unseen = re.search('Messages\s+(\d+)\s+UnSeen\s+(\d+)', decode(data[0]), re.I).groups()
                   unseen = int(unseen)
                   if log: LogMsg("IMAP: %s, %s messages and %s unseen" % (name, total, unseen), DEBUG)
 
@@ -193,21 +214,19 @@ class Imap2UsbLamp(object):
                usblamp.setFading(delay, color)
             else:
                usblamp.switchOff()
-               
+
             mailbox.logout()
-            
             if not loop:
                break
             if usblamp.__class__.error:
                if log: LogMsg("IMAP: CheckUnseen thread exited.", DEBUG)
                break
-               # raise usblamp.__class__.error
             sleep(float(config['interval']) * (DEBUG and 1 or 60))
       
    @staticmethod
-   def server(config, port, log, pwdQueue=None): 
+   def server(config, port, usblamp, log, pwdQueue=None): 
       import socket
-      noPwd = [k for k, v in config.items() if not v.has_key('token') and not v.get('password')]
+      noPwd = [k for k, v in config.items() if not v.get('token') and not v.get('password')]
       sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
       server_address = ('localhost', port)
       sock.bind(server_address)
@@ -219,16 +238,21 @@ class Imap2UsbLamp(object):
          if log: LogMsg("IMAP: Server get connection from %s" % str(client_address), DEBUG)
          try:
             while True:
-               data = conn.recv(64)
+               data = decode(conn.recv(64))
+               if not data: 
+                  break
                if log: LogMsg("IMAP: Server received %s" % (data), DEBUG)
                msg = ''
-               if data == 'status':
+               if data == 'stop':
+                  usblamp.exit()
+                  msg += 'ok'
+               elif data == 'status':
                   for k, v in config.items():
                      if k in noPwd:
                         msg += '%s: Waiting password for %s\n' % (k, v['username'])
                      else:
                         msg += '%s: Working\n' % (k)
-               elif data.lower().startswith('password'):
+               elif str.startswith(data.lower(), 'password'):
                   data = data.split(',')
                   cfg, pwd = data[1:3]
                   if cfg not in noPwd:
@@ -242,7 +266,7 @@ class Imap2UsbLamp(object):
                elif data == 'exit':
                   break
                if msg:
-                  conn.sendall(msg)          
+                  conn.sendall(encode(msg))
          finally:
             conn.close()
 
@@ -255,18 +279,21 @@ class Imap2UsbLamp(object):
          sock.connect(server_address)
       except socket.error:
          print('\nPlease start server first.\n')
-         exit()
+         sys.exit()
          
-      
       try:
          while True:
-            print '\nImap2UsbLamp Status:\n'
-            sock.sendall('status')
-            print(sock.recv(1024))
+            print('\nImap2UsbLamp Status:\n')
+            sock.sendall(encode('status'))
+            print(decode(sock.recv(1024)))
             cmd = raw_input('Command: ').replace(' ', '').lower()
-            if cmd == 'exit':
-               sock.sendall('exit')
-               exit()
+            if cmd == 'stop':
+               sock.sendall(encode(cmd))
+               print('\n'+decode(sock.recv(1024)))
+               sys.exit()
+            elif cmd == 'exit':
+               sock.sendall(encode(cmd))
+               sys.exit()
             elif cmd == 'password':
                import getpass
                while True:
@@ -274,11 +301,11 @@ class Imap2UsbLamp(object):
                      cfg = int(raw_input('IMAP_?: ').replace(' ', ''))
                      break
                   except:
-                     print '\nPlease enter an integer.\n'
+                     print('\nPlease enter an integer.\n')
                pwd = getpass.getpass()
-               sock.sendall(','.join([cmd, 'IMAP_' + str(cfg), pwd]))
-               print
-               print(sock.recv(1024))
+               cfg = str(cfg)
+               sock.sendall(encode((','.join([cmd, 'IMAP_' + cfg, pwd]))))
+               print('\n'+decode(sock.recv(1024)))
       finally:
          sock.close()
          
@@ -302,7 +329,7 @@ def imap2usblamp():
    
    if options.status:
       Thread(target=imap.client, args=(options.port,)).start()
-      exit()
+      sys.exit()
       
    if not imap.config:
       imap.addConfig('IMAP_1')
@@ -318,7 +345,7 @@ def imap2usblamp():
             print('\t%s = %s' % (k ,v))
       done = True
       
-   if done: exit()
+   if done: sys.exit()
    
    usblamp = USBLamp()
    usblamp.log = options.log
@@ -326,13 +353,13 @@ def imap2usblamp():
    workers = []
    pwdQueue = {}
    for k, v in imap.config.items():
-      if not v.has_key('token') and not v.get('password'):
+      if not v.get('token') and not v.get('password'):
          pwdQueue[k] = (Queue(), Queue())
       workers.append(Timer(THREAD_INTERVAL * i, imap.checkUnseen, args=(k, v, usblamp, options.log, pwdQueue.get(k, None), True)))
       workers[-1].start()
       i += 1
   
-   t = Thread(target=imap.server, args=(imap.config, options.port, options.log, pwdQueue))
+   t = Thread(target=imap.server, args=(imap.config, options.port, usblamp, options.log, pwdQueue))
    t.daemon = True
    t.start()
 
@@ -341,11 +368,11 @@ def imap2usblamp():
          sleep(60)
          if USBLamp.error:
             raise USBLamp.error
-      except (KeyboardInterrupt, SystemExit):
+      except (KeyboardInterrupt, SystemExit, USBError):
          usblamp.exit()
          for w in workers:
             w.join()
-         exit()
+         sys.exit()
 
 if DEBUG and __name__ == '__main__':
    imap2usblamp()

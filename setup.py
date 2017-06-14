@@ -6,8 +6,8 @@ setup(
    packages = ['pyusblamp'],
    version = pyusblamp.__version__,
    description = 'Mailbox Friends Alert (Dream Cheeky) Driver',
-   license='GPLv3',
-   install_requires=['pyusb',],
+   license = 'GPLv3',
+   install_requires = ['pyusb',],
    
    author = 'onelife',
    author_email = 'onelife.real[AT]gmail.com',
@@ -22,6 +22,7 @@ setup(
       'Natural Language :: English',
       'Operating System :: Microsoft :: Windows',
       'Programming Language :: Python :: 2.7',
+      'Programming Language :: Python :: 3.6',
       'Topic :: System :: Hardware :: Hardware Drivers',
    ],
    
