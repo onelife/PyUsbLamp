@@ -2,7 +2,7 @@
 # Author: onelife
 
 from time import sleep
-from Queue import Queue, Empty
+from queue import Queue, Empty
 from threading import Thread
 
 import usb.core

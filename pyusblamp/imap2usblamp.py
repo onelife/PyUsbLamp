@@ -3,7 +3,7 @@
 
 from optparse import OptionParser
 from ConfigParser import RawConfigParser
-from Queue import Queue, Empty
+from queue import Queue, Empty
 from threading import Thread, Timer
 import re
 from time import sleep
@@ -251,7 +251,12 @@ class Imap2UsbLamp(object):
       import socket
       sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
       server_address = ('localhost', port)
-      sock.connect(server_address)
+      try:
+         sock.connect(server_address)
+      except socket.error:
+         print('\nPlease start server first.\n')
+         exit()
+         
       
       try:
          while True:
@@ -342,4 +347,5 @@ def imap2usblamp():
             w.join()
          exit()
 
-   
+if DEBUG and __name__ == '__main__':
+   imap2usblamp()
