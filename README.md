@@ -8,3 +8,18 @@ Basically, it is a RGB LED connected with USB.
 **Product ID:** `0x000a`
 
 ![UsbLamp](UsbLamp.png)
+
+## Dependencies
+pyusb
+
+## Installation
+1. Install from Pypi
+
+   `pip install pyusblamp`
+
+or
+
+2. Install from GitHub
+
+   `pip install git+https://github.com/onelife/PyUsbLamp.git`
+

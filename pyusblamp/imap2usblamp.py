@@ -2,7 +2,7 @@
 # Author: onelife
 
 from optparse import OptionParser
-from configparser import RawConfigParser
+from configparser import RawConfigParser, NoSectionError
 from queue import Queue, Empty
 from threading import Thread, Timer
 import sys
@@ -56,6 +56,14 @@ class Imap2UsbLamp(object):
                for k in self.parser.options(s):
                   self.config[s][k] = self.parser.get(s, k)
                if self.log: LogMsg("IMAP: %s = %s" % (s, str(self.config[s])), DEBUG)
+         except NoSectionError as e:
+            print('\n%s' % (e.message))
+            services.remove(s)
+            self.parser.set(IMAP_SECTION, 'Services', services)
+            self.config.pop(s)
+            with open(self.cfgPath, 'wb') as f:
+               self.parser.write(f)
+               print('\nIMAP: Config file "%s" saved.' % (self.cfgPath))
          except:
             self.config = {}
 
@@ -80,8 +88,8 @@ class Imap2UsbLamp(object):
                from oauth2 import GeneratePermissionUrl, AuthorizeTokens
             import webbrowser
             clientId = raw_input('Client ID: ').strip()
-            secret = raw_input('Client secret: ').strip()
-            print('\nWeb brower will open soon. Please click "Allow access" and copy the verification code.\n')
+            secret = raw_input('Client Secret: ').strip()
+            print('\nWeb browser will open soon. Please click "Allow access" and copy the verification code.\n')
             url = GeneratePermissionUrl(clientId)
             webbrowser.open(url, new=2)
             code = raw_input('Verification Code: ').strip()
@@ -138,7 +146,7 @@ class Imap2UsbLamp(object):
             self.parser.set(section, k, v)
          with open(self.cfgPath, 'wb') as f:
             self.parser.write(f)
-            print('\nIMAP: Config file %s saved.' % (self.cfgPath))
+            print('\nIMAP: Config file "%s" saved.' % (self.cfgPath))
 
    @staticmethod
    def checkUnseen(name, config, usblamp, log, queue=None, loop=False):
