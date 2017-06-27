@@ -33,50 +33,6 @@ riso_kagaku_tbl = (
 RISO_KAGAKU_IX = lambda r, g, b: riso_kagaku_tbl[(r and 1 or 0)+(g and 2 or 0)+(b and 4 or 0)]
 
 
-def getSteps(maxValue, steps):
-   x = list(range(0, maxValue + 1, max(1, int(maxValue / (steps - 1)))))
-   if len(x) >= steps:
-      x = x[:steps - 1]
-      x.append(maxValue)
-   else:
-      x.extend([maxValue] * (steps - len(x)))
-   return x
-
-def fading(usblamp):
-   step = 0
-   dir = 1
-   idle = True
-   while True:
-      if usblamp.__class__.error: 
-         break
-         # raise usblamp.__class__.error
-      try:
-         delay, newColor = usblamp.task.get(block=idle)
-         if delay <= 0: 
-            idle = True
-            if newColor is not None:
-               usblamp.setColor(newColor)
-            continue
-         elif usblamp.led_type == 1:
-            idle = False
-            r = getSteps(newColor[0], STEPS)
-            g = getSteps(newColor[1], STEPS)
-            b = getSteps(newColor[2], STEPS)
-            state = list(zip(r, g, b))
-      except Empty:
-         pass
-      
-      sleep(delay)
-      if usblamp.led_type == 1:
-         # Do fading
-         usblamp.setColor(state[step])
-         step += dir
-         if step == STEPS - 1 or step == 0:
-            dir = -dir
-      elif usblamp.led_type == 2:
-         setColor(newColor)
-
-
 class USBLamp(object):
    ENDPOINT       = 0x81
    ID_VENDOR      = 0x1d34
@@ -86,6 +42,51 @@ class USBLamp(object):
    ID_PRODUCT_2   = 0x1320
    RGB_MAX        = 0x40
    error          = None
+
+   @staticmethod
+   def getSteps(maxValue, steps):
+      x = list(range(0, maxValue + 1, max(1, int(maxValue / (steps - 1)))))
+      if len(x) >= steps:
+         x = x[:steps - 1]
+         x.append(maxValue)
+      else:
+         x.extend([maxValue] * (steps - len(x)))
+      return x
+
+   @staticmethod
+   def fading(usblamp):
+      step = 0
+      dir = 1
+      idle = True
+      while True:
+         if usblamp.__class__.error: 
+            break
+            # raise usblamp.__class__.error
+         try:
+            delay, newColor = usblamp.task.get(block=idle)
+            if delay <= 0: 
+               idle = True
+               if newColor is not None:
+                  usblamp.setColor(newColor)
+               continue
+            elif usblamp.led_type == 1:
+               idle = False
+               r = usblamp.getSteps(newColor[0], STEPS)
+               g = usblamp.getSteps(newColor[1], STEPS)
+               b = usblamp.getSteps(newColor[2], STEPS)
+               state = list(zip(r, g, b))
+         except Empty:
+            pass
+         
+         sleep(delay)
+         if usblamp.led_type == 1:
+            # Do fading
+            usblamp.setColor(state[step])
+            step += dir
+            if step == STEPS - 1 or step == 0:
+               dir = -dir
+         elif usblamp.led_type == 2:
+            setColor(newColor)
 
    def send(self, bytes):
       try:
@@ -155,7 +156,8 @@ class USBLamp(object):
          self.send((0x00, 0x02, 0x00, 0x2e, 0x00, 0x00, 0x2b, 0x05))
          
       # create thread for fading
-      self.t = Thread(target=fading, args=(self, ))
+      self.t = Thread(target=self.fading, args=(self, ))
+      self.t.daemon = True
       self.t.start()
             
    def getColor(self):
