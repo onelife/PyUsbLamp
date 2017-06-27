@@ -3,6 +3,11 @@
 from os import path
 pwd = path.abspath(path.curdir)
 
+import sys
+sys.path.insert(0, pwd)
+
+import pyusblamp
+
 block_cipher = None
 
 libusb = [
@@ -27,7 +32,7 @@ exe = EXE(pyz,
           a.binaries,
           a.zipfiles,
           a.datas,
-          name='imap2usblamp',
+          name='imap2usblamp_' + pyusblamp.__version__,
           debug=False,
           strip=False,
           upx=True,

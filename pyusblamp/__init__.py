@@ -1,6 +1,6 @@
 __author__ = 'onelife'
 __license__ = "GPLv3"
-__version__ = '1.16'
+__version__ = '1.18'
 
 __setup = False
 __depth = 1
