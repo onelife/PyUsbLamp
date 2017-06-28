@@ -27,18 +27,19 @@ DEBUG = 0
 CONFIG_FILE_NAME = '.pyusblamp'
 IMAP_SECTION = 'IMAP_LIST'
 CHECK_QUEUE_INTERVAL = DEBUG and 10 or 20
-LogMsg = AppLog().Message
+CHECK_EXIT_INTERVAL = 30
+logger = AppLog().getLogger(__name__)
+logger.setLevel(DEBUG and AppLog.DEBUG or AppLog.INFO)
 
 
 class Imap2UsbLamp(object):
    def __init__(self, port):
-      self.log = DEBUG
       self.port = port
       self.usblamp = None
       self.pwdQueue = (Queue(), Queue())
       self.getConfig()
 
-   def startServer(self,  usblamp):
+   def startServer(self, usblamp):
       self.usblamp = usblamp
       # create threads for checkUnseen and server
       t1 = Thread(target=self.checkUnseen, args=(self, True))
@@ -62,20 +63,20 @@ class Imap2UsbLamp(object):
       if self.parser.has_option(IMAP_SECTION, 'Services'):
          try:
             services = eval(self.parser.get(IMAP_SECTION, 'Services'))
-            if self.log: LogMsg("IMAP: Service = %s" % (str(services)), DEBUG)
+            logger.debug("Service = %s" % (str(services)))
             for s in services:
                self.config[s] = {}
                for k in self.parser.options(s):
                   self.config[s][k] = self.parser.get(s, k)
-               if self.log: LogMsg("IMAP: %s = %s" % (s, str(self.config[s])), DEBUG)
+               # logger.debug("%s = %s" % (s, str(self.config[s])))
          except NoSectionError as e:
-            print('\n%s' % (e.message))
+            logger.error('%s' % (e.message))
             services.remove(s)
             self.parser.set(IMAP_SECTION, 'Services', services)
             self.config.pop(s)
             with open(self.cfgPath, 'wb') as f:
                self.parser.write(f)
-               print('\nIMAP: Config file "%s" saved.' % (self.cfgPath))
+               logger.info('Config file "%s" saved.' % (self.cfgPath))
          except:
             self.config = {}
 
@@ -106,9 +107,9 @@ class Imap2UsbLamp(object):
             webbrowser.open(url, new=2)
             code = raw_input('Verification Code: ').strip()
             token = AuthorizeTokens(clientId, secret, code)
-            if self.log: LogMsg("IMAP: Refresh Token: %s" % (token['refresh_token']), DEBUG)
-            if self.log: LogMsg("IMAP: Access Token: %s" % (token['access_token']), DEBUG)
-            if self.log: LogMsg("IMAP: Access Token Expiration Seconds: %s" % (token['expires_in']), DEBUG)
+            logger.debug("Refresh Token: %s" % (token['refresh_token']))
+            logger.debug("Access Token: %s" % (token['access_token']))
+            logger.info("Access Token Expiration Seconds: %s" % (token['expires_in']))
             self.config[section]['clientId'] = clientId
             self.config[section]['secret'] = secret
             self.config[section]['token'] = token
@@ -158,7 +159,7 @@ class Imap2UsbLamp(object):
             self.parser.set(section, k, v)
          with open(self.cfgPath, 'wb') as f:
             self.parser.write(f)
-            print('\nIMAP: Config file "%s" saved.' % (self.cfgPath))
+            logger.info('*** Config file "%s" saved.' % (self.cfgPath))
 
    @staticmethod
    def checkUnseen(imap, loop=False): 
@@ -203,21 +204,26 @@ class Imap2UsbLamp(object):
          unseen = 0
          waitPwd = False
          config = imap.config[cfgName]
-         mailbox = imaplib.IMAP4_SSL(config['host'])
-         if DEBUG > 1: mailbox.debug = 4
+         mailbox = None
          if config.get('token'):
             if time() > timeoutOrPwd[cfgName]:
                timeoutOrPwd[cfgName] = refreshToken(config)
             auth_string = GenerateOAuth2String(config['username'], config['token']['access_token'], False)
+            mailbox = imaplib.IMAP4_SSL(config['host'])
+            if DEBUG > 1: mailbox.debug = 4
             mailbox.authenticate('XOAUTH2', lambda x: auth_string)
          else:
             if timeoutOrPwd[cfgName]:
+               mailbox = imaplib.IMAP4_SSL(config['host'])
+               if DEBUG > 1: mailbox.debug = 4
                mailbox.login(config['username'], timeoutOrPwd[cfgName])
             else:
-               if imap.log: LogMsg("IMAP: %s, Waiting password." % (cfgName), DEBUG)
+               logger.debug("%s, Waiting password." % (cfgName))
                try:
                   if rxPwd.get(cfgName, ''):
                      pwd = rxPwd.pop(cfgName)
+                     mailbox = imaplib.IMAP4_SSL(config['host'])
+                     if DEBUG > 1: mailbox.debug = 4
                      mailbox.login(config['username'], pwd)
                      timeoutOrPwd[cfgName] = pwd
                      imap.pwdQueue[1].put('OK for %s' % (cfgName))
@@ -237,13 +243,13 @@ class Imap2UsbLamp(object):
                typ, data = mailbox.search(None, config['search'])
                if typ == 'OK':
                   unseen = len(data[0].split())
-                  if imap.log: LogMsg("IMAP: %s, %d messages match '%s'" % (cfgName, unseen, config['search']), DEBUG)
+                  logger.info("%s, %d messages match '%s'" % (cfgName, unseen, config['search']))
             else:
                typ, data = mailbox.status(config['mailbox'],'(Messages UnSeen)')
                if typ == 'OK':
                   total, unseen = re.search('Messages\s+(\d+)\s+UnSeen\s+(\d+)', decode(data[0]), re.I).groups()
                   unseen = int(unseen)
-                  if imap.log: LogMsg("IMAP: %s, %s messages and %s unseen" % (cfgName, total, unseen), DEBUG)
+                  logger.info("%s, %s messages and %s unseen" % (cfgName, total, unseen))
             # control usblamp
             if unseen:
                delay = float(config['delay'])
@@ -258,9 +264,10 @@ class Imap2UsbLamp(object):
             t = Timer(CHECK_QUEUE_INTERVAL, lambda x: task.put(x), args=(cfgName,))
             t.start()
                
-         mailbox.logout()
+         if mailbox: 
+            mailbox.logout()
          if imap.usblamp.__class__.error:
-            if imap.log: LogMsg("IMAP: CheckUnseen thread exited.", DEBUG)
+            logger.debug("*** CheckUnseen thread exited.")
             break
          if not loop:
             break
@@ -272,23 +279,22 @@ class Imap2UsbLamp(object):
       sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
       server_address = ('localhost', imap.port)
       sock.bind(server_address)
-      if imap.log: LogMsg("IMAP: Server started on %s" % str(server_address), DEBUG)
+      logger.info("*** Server started on %s" % str(server_address))
       sock.listen(1)
       
       while True:
          conn, client_address = sock.accept()
-         if imap.log: LogMsg("IMAP: Server get connection from %s" % str(client_address), DEBUG)
+         logger.info("Server get connection from %s" % str(client_address))
          try:
             while True:
                data = decode(conn.recv(64))
                if not data: 
                   break
-               if imap.log: 
-                  if 'password' in data.lower():
-                     temp = ','.join(data.split(',')[:2])
-                     LogMsg("IMAP: Server received %s,xxx" % (temp), DEBUG)
-                  else:
-                     LogMsg("IMAP: Server received %s" % (data), DEBUG)
+               if 'password' in data.lower():
+                  temp = ','.join(data.split(',')[:2])
+                  logger.info("Server received %s,xxx" % (temp))
+               else:
+                  logger.info("Server received %s" % (data))
                msg = ''
                if data == 'stop':
                   imap.usblamp.exit()
@@ -366,13 +372,13 @@ def imap2usblamp():
    parser.add_option("-p", "--port", action="store", type="int", dest="port", default = 8888, help='Port to listen')
    parser.add_option("-l", "--log", action="store_true", dest="log", default = False, help='Enable application log')
    (options, _) = parser.parse_args()
-   options.log = options.log and 1 or 0
 
-   if DEBUG: print("IMAP: options %s" % (options))
+   if options.log:
+      AppLog().enableLogFile()
+   logger.debug("options %s" % (options))
    
-   done = False
    imap = Imap2UsbLamp(options.port)
-   imap.log = options.log
+   done = False
    
    if options.status:
       Thread(target=imap.client, args=(options.port,)).start()
@@ -385,6 +391,7 @@ def imap2usblamp():
       section = 'IMAP_' + str(int(sorted(imap.config.keys())[-1].split('_')[1]) + 1)
       imap.addConfig(section)
       done = True
+      
    if options.show:
       for n, c in imap.config.items():
          print('%s:' % (n))
@@ -393,19 +400,19 @@ def imap2usblamp():
       done = True
       
    if done: sys.exit()
-   
+
+   # start server
    usblamp = USBLamp()
-   usblamp.log = options.log
    imap.startServer(usblamp)
 
+   # check exit
    while True:
       try:
-         sleep(60)
-         if USBLamp.error:
+         sleep(CHECK_EXIT_INTERVAL)
+         if USBLamp.error: 
             raise USBLamp.error
       except (KeyboardInterrupt, SystemExit, USBError):
          usblamp.exit()
-
          sys.exit()
 
 if DEBUG and __name__ == '__main__':

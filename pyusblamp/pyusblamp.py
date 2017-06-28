@@ -17,7 +17,9 @@ else:
 
 DEBUG = 0
 STEPS = 32
-LogMsg = AppLog().Message
+logger = AppLog().getLogger(__name__)
+logger.setLevel(DEBUG and AppLog.DEBUG or AppLog.INFO)
+
 
 # R+2G+4B -> riso kagaku color index
 riso_kagaku_tbl = (
@@ -91,7 +93,7 @@ class USBLamp(object):
    def send(self, bytes):
       try:
          if self.led_type == 1:
-            if self.log: LogMsg("USBLamp: send(%d) %02X %02X %02X %02X %02X %02X %02X %02X" % (len(bytes), bytes[0], bytes[1], bytes[2], bytes[3], bytes[4], bytes[5] ,bytes[6], bytes[7]), DEBUG)
+            logger.debug("send(%d) %02X %02X %02X %02X %02X %02X %02X %02X" % (len(bytes), bytes[0], bytes[1], bytes[2], bytes[3], bytes[4], bytes[5] ,bytes[6], bytes[7]))
             # requesttype = USB_TYPE_CLASS | USB_RECIP_INTERFACE
             # request = USB_REQ_SET_CONFIGURATION
             # value = 0x200
@@ -99,14 +101,14 @@ class USBLamp(object):
             # timeout = 1000
             ret = self.lamp.ctrl_transfer(0x21, 0x09, 0x200, 0x00, bytes, 1000)
          elif self.led_type == 2:
-            if self.log: LogMsg("USBLamp: send(%d) %02X %02X %02X %02X %02X" % (len(bytes), bytes[0], bytes[1], bytes[2], bytes[3], bytes[4]), DEBUG)
+            logger.debug("send(%d) %02X %02X %02X %02X %02X" % (len(bytes), bytes[0], bytes[1], bytes[2], bytes[3], bytes[4]))
             ret = self.lamp.write(0x02, bytes, 1000)
       except USBError as e:
          self.__class__.error = e
          raise
 
       if (ret != len(bytes)):
-         print("USBLamp Error: %d VS. %d" % (ret, len(bytes)))
+         logger.error("Get %d VS. send %d" % (ret, len(bytes)))
    
    def __init__(self):
       if sys.platform != 'win32':
@@ -120,7 +122,6 @@ class USBLamp(object):
          'MS' + re.search('(\d+) bit', sys.version).groups()[0], 
          'dll', 'libusb-1.0.dll'))
       
-      self.log = DEBUG
       self.led_type = -1
       self.lamp  = None
       self.color = (0, 0, 0)
@@ -131,19 +132,19 @@ class USBLamp(object):
          devs = list(usb.core.find(idVendor=self.ID_VENDOR, idProduct=self.ID_PRODUCT_NEW, find_all=True,backend=backend))
          if devs:
             self.led_type = 1
-            if self.log: LogMsg("USBLamp: idVendor %d, idProduct %d" % (self.ID_VENDOR, self.ID_PRODUCT_NEW), DEBUG)
+            logger.info("idVendor %d, idProduct %d" % (self.ID_VENDOR, self.ID_PRODUCT_NEW))
             break
          devs = list(usb.core.find(idVendor=self.ID_VENDOR, idProduct=self.ID_PRODUCT_OLD, find_all=True,backend=backend))
          if devs:
             self.led_type = 1
-            if self.log: LogMsg("USBLamp: idVendor %d, idProduct %d" % (self.ID_VENDOR, self.ID_PRODUCT_OLD), DEBUG)
+            logger.info("idVendor %d, idProduct %d" % (self.ID_VENDOR, self.ID_PRODUCT_OLD))
             break
          devs = list(usb.core.find(idVendor=self.ID_VENDOR_2, idProduct=self.ID_PRODUCT_2, find_all=True,backend=backend))
          if devs:
             self.led_type = 2
-            if self.log: LogMsg("USBLamp: idVendor %d, idProduct %d" % (self.ID_VENDOR_2, self.ID_PRODUCT_2), DEBUG)
+            logger.info("idVendor %d, idProduct %d" % (self.ID_VENDOR_2, self.ID_PRODUCT_2))
          break
-      if self.log: LogMsg("USBLamp: LED Type is %d" % (self.led_type), DEBUG)
+      logger.info("LED Type is %d" % (self.led_type))
       
       if not devs:
          raise SystemError('No device found!')
@@ -165,7 +166,7 @@ class USBLamp(object):
       
    def setColor(self, newColor):
       self.color = newColor
-      if self.log: LogMsg("USBLamp: Set color %s" % str(self.color), DEBUG)
+      logger.debug("Set color %s" % str(self.color))
 
       if self.led_type == 1:
          self.send(self.color + (0x00, 0x00, 0x00, 0x00, 0x05))
@@ -174,7 +175,7 @@ class USBLamp(object):
          
    def setFading(self, delay, newColor):
       self.color = newColor
-      if self.log: LogMsg("USBLamp: Set fading %f,%s" % (delay, str(self.color)), DEBUG)
+      logger.debug("Set fading %f,%s" % (delay, str(self.color)))
       self.task.put((delay, newColor))
 
    def switchOff(self):
@@ -184,4 +185,4 @@ class USBLamp(object):
       self.__class__.error = SystemExit('USBLamp exit.')
       self.setFading(0, (0, 0, 0))
       self.t.join()
-      if self.log: LogMsg("USBLamp: Fading thread exited.", DEBUG)
+      logger.debug("*** Fading thread exited.")
