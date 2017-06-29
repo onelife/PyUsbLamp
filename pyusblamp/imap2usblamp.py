@@ -76,7 +76,7 @@ class Imap2UsbLamp(object):
             self.config.pop(s)
             with open(self.cfgPath, 'wb') as f:
                self.parser.write(f)
-               logger.info('Config file "%s" saved.' % (self.cfgPath))
+               logger.info('*** Config file "%s" saved.' % (self.cfgPath))
          except:
             self.config = {}
 
@@ -174,8 +174,8 @@ class Imap2UsbLamp(object):
       task = Queue()
       timeoutOrPwd = {}
       rxPwd = {}
+      # trigger all config
       for name, config in imap.config.items():
-         # preprocess
          if config.get('token'):
             # refresh token
             def refreshToken(config):
@@ -411,7 +411,8 @@ def imap2usblamp():
          sleep(CHECK_EXIT_INTERVAL)
          if USBLamp.error: 
             raise USBLamp.error
-      except (KeyboardInterrupt, SystemExit, USBError):
+      except (KeyboardInterrupt, SystemExit, USBError) as e:
+         logger.error(str(e))
          usblamp.exit()
          sys.exit()
 
