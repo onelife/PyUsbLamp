@@ -200,6 +200,7 @@ class Imap2UsbLamp(object):
             except Empty:
                sleep(CHECK_QUEUE_INTERVAL)
                continue
+               
          # access imap
          unseen = 0
          waitPwd = False
@@ -250,6 +251,7 @@ class Imap2UsbLamp(object):
                   total, unseen = re.search('Messages\s+(\d+)\s+UnSeen\s+(\d+)', decode(data[0]), re.I).groups()
                   unseen = int(unseen)
                   logger.info("%s, %s messages and %s unseen" % (cfgName, total, unseen))
+                  
             # control usblamp
             if unseen:
                delay = float(config['delay'])
@@ -257,6 +259,7 @@ class Imap2UsbLamp(object):
                imap.usblamp.setFading(delay, color)
             else:
                imap.usblamp.switchOff()
+               
             # schedule next check
             t = Timer(float(config['interval']) * (DEBUG and 1 or 60), lambda x: task.put(x), args=(cfgName,))
             t.start()
@@ -402,7 +405,11 @@ def imap2usblamp():
    if done: sys.exit()
 
    # start server
-   usblamp = USBLamp()
+   try:
+      usblamp = USBLamp()
+   except Exception as e:
+      logger.error(str(e))
+      exit()
    imap.startServer(usblamp)
 
    # check exit
@@ -411,7 +418,7 @@ def imap2usblamp():
          sleep(CHECK_EXIT_INTERVAL)
          if USBLamp.error: 
             raise USBLamp.error
-      except (KeyboardInterrupt, SystemExit, USBError) as e:
+      except Exception as e:
          logger.error(str(e))
          usblamp.exit()
          sys.exit()
