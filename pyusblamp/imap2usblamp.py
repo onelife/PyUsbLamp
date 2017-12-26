@@ -61,6 +61,7 @@ class Imap2UsbLamp(object):
         t2 = Thread(target=self.server, args=(self,))
         t2.daemon = True
         t2.start()
+        return (t1, t2)
 
     def get_config(self):
         # read config file
@@ -329,7 +330,7 @@ class Imap2UsbLamp(object):
         sock.listen(1)
         stop = False
 
-        while not stop:
+        while not stop and not imap.stop.is_set():
             conn, client_address = sock.accept()
             logger.info("Server get connection from %s" % str(client_address))
             try:
@@ -370,9 +371,11 @@ class Imap2UsbLamp(object):
             finally:
                 conn.close()
 
+        sock.close()
         logger.debug("*** server thread exited.")
-        imap.usblamp.exit()
-        imap.stop.set()
+        if stop:
+            imap.usblamp.exit()
+            imap.stop.set()
 
     @staticmethod
     def client(port):
@@ -463,10 +466,12 @@ def imap2usblamp():
     except Exception as e:
         logger.error(str(e))
         sys.exit()
-    imap.start_server(usblamp)
+    t1, t2 = imap.start_server(usblamp)
 
     # wait to exit
     imap.stop.wait()
+    t1.join()
+    t2.join()
     sys.exit()
 
 
