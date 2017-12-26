@@ -327,8 +327,9 @@ class Imap2UsbLamp(object):
             raise
         logger.info("*** Server started on %s" % str(server_address))
         sock.listen(1)
+        stop = False
 
-        while True:
+        while not stop:
             conn, client_address = sock.accept()
             logger.info("Server get connection from %s" % str(client_address))
             try:
@@ -344,6 +345,7 @@ class Imap2UsbLamp(object):
                     msg = ''
                     if data == 'stop':
                         conn.sendall(encode('ok'))
+                        stop = True
                         break
                     elif data == 'status':
                         for k, v in imap.config.items():
@@ -367,11 +369,10 @@ class Imap2UsbLamp(object):
                         conn.sendall(encode(msg))
             finally:
                 conn.close()
-                if data == 'stop':
-                    imap.usblamp.exit()
-                    imap.stop.set()
-                    break
+
         logger.debug("*** server thread exited.")
+        imap.usblamp.exit()
+        imap.stop.set()
 
     @staticmethod
     def client(port):

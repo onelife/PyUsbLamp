@@ -126,7 +126,7 @@ class USBLamp(object):
 
         # initial lamp and color
         self._lamp = devs[0]
-        if self._lamp.is_kernel_driver_active(0):
+        if sys.platform.startswith('linux') and self._lamp.is_kernel_driver_active(0):
             self._reattach = True
             self._lamp.detach_kernel_driver(0)
         else:

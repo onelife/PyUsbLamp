@@ -27,7 +27,7 @@ class AppLog(object):
         self.console.set_name(CONSOLE_LOGGER_NAME)
         self.console.setLevel(logging.DEBUG)
         self.console.setFormatter(logging.Formatter(
-            fmt='[%(asctime)s] %(levelname)s [%(filename)s->%(funcName)s:%(lineno)s] {%(message)s}',
+            fmt='[%(asctime)s] %(levelname)s [%(filename)s->%(funcName)s:%(lineno)s] %(message)s',
             datefmt='%Y-%m-%d %H:%M:%S'))
         self.logger.addHandler(self.console)
 
@@ -36,7 +36,7 @@ class AppLog(object):
         log_file = logging.FileHandler(path.join(path.abspath('.'), LOG_FILE_NAME), 'w')
         log_file.setLevel(logging.DEBUG)
         log_file.setFormatter(logging.Formatter(
-            fmt='[%(asctime)s] %(levelname)s [%(filename)s->%(funcName)s:%(lineno)s] {%(message)s}',
+            fmt='[%(asctime)s] %(levelname)s [%(filename)s->%(funcName)s:%(lineno)s] %(message)s',
             datefmt='%Y-%m-%d %H:%M:%S'))
         self.logger.addHandler(log_file)
 

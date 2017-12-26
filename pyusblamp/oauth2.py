@@ -66,8 +66,17 @@ import json
 from optparse import OptionParser
 import smtplib
 import sys
-from six.moves.urllib.request import urlopen
-from six.moves.urllib.parse import quote, urlencode
+# from six.moves.urllib.request import urlopen
+# from six.moves.urllib.parse import quote, urlencode
+import urllib
+if sys.version_info >= (3, ):
+    from urllib.request import urlopen
+    from urllib.parse import quote
+    from urllib.parse import urlencode
+else:
+    from urllib import urlopen
+    from urllib import quote
+    from urllib import urlencode
 
 
 def SetupOptionParser():
