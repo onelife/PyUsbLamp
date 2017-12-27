@@ -21,15 +21,30 @@ class AppLog(object):
             return
 
         import sys
-        self.logger = logging.getLogger('')
-        self.logger.setLevel(logging.DEBUG)
-        self.console = logging.StreamHandler(stream=sys.stdout)
-        self.console.set_name(CONSOLE_LOGGER_NAME)
-        self.console.setLevel(logging.DEBUG)
-        self.console.setFormatter(logging.Formatter(
+        # import colorlog
+        #
+        # console = colorlog.StreamHandler(stream=sys.stdout)
+        # console.setFormatter(colorlog.ColoredFormatter(
+        #     '%(log_color)s[%(asctime)s] %(levelname)s [%(filename)s->%(funcName)s:%(lineno)s] %(message)s',
+        #     log_colors={
+        #         'DEBUG': 'cyan',
+        #         'INFO': 'green',
+        #         'WARNING': 'yellow',
+        #         'ERROR': 'red',
+        #         'CRITICAL': 'red,bg_white',
+        #     },
+        #     datefmt='%Y-%m-%d %H:%M:%S'))
+        console = logging.StreamHandler(stream=sys.stdout)
+        console.setFormatter(logging.Formatter(
             fmt='[%(asctime)s] %(levelname)s [%(filename)s->%(funcName)s:%(lineno)s] %(message)s',
             datefmt='%Y-%m-%d %H:%M:%S'))
-        self.logger.addHandler(self.console)
+        console.set_name(CONSOLE_LOGGER_NAME)
+        console.setLevel(logging.DEBUG)
+
+        # self.logger = colorlog.getLogger('')
+        self.logger = logging.getLogger('')
+        self.logger.setLevel(logging.DEBUG)
+        self.logger.addHandler(console)
 
     def enable_logfile(self):
         from os import path
