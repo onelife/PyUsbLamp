@@ -5,7 +5,7 @@ from os import path
 
 __author__ = "onelife"
 __license__ = "GPLv3"
-__version__ = "1.40"
+__version__ = "1.41"
 
 __setup = False
 __depth = 1

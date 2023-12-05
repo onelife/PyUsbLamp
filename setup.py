@@ -47,7 +47,7 @@ setup(
         ],
     },
     author=pyusblamp.__author__,
-    author_email="onelife.real[AT]gmail.com",
+    author_email="onelife.real@gmail.com",
     license=pyusblamp.__license__,
     license_file="LICENSE",
     url="https://github.com/onelife/PyUsbLamp",
