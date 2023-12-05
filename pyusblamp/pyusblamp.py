@@ -1,19 +1,20 @@
+# -*- coding: utf-8 -*-
+
 # Project: PyUsbLamp
 # Author: onelife
 
 import sys
-from six.moves.queue import Queue, Empty
+from queue import SimpleQueue as Queue, Empty
 from threading import Thread, Event
 
-import usb.core
-import usb.backend.libusb1
+import usb.core  # type: ignore
+import usb.backend.libusb1  # type: ignore
 from usb.core import USBError
 
 if sys.version_info >= (3,):
     from .applog import AppLog
 else:
     from applog import AppLog
-
 
 DEBUG = 0
 STEPS = 32
@@ -22,8 +23,8 @@ logger.setLevel(DEBUG and AppLog.DEBUG or AppLog.INFO)
 
 
 class USBLamp(object):
-    ID_VENDOR = 0x1d34
-    ID_PRODUCT = (0x000a, 0x0004)
+    ID_VENDOR = 0x1D34
+    ID_PRODUCT = (0x000A, 0x0004)
     RGB_MAX = 0x40
 
     @staticmethod
@@ -36,7 +37,7 @@ class USBLamp(object):
                 delta = 1 if start < end else -1
             x = list(range(start, end + 1, delta))
         if len(x) >= steps:
-            x = x[:steps - 1]
+            x = x[: steps - 1]
             x.append(end)
         else:
             x.extend([end] * (steps - len(x)))
@@ -102,31 +103,43 @@ class USBLamp(object):
 
     def __init__(self, error_cb=None):
         # initial backend
-        if sys.platform == 'win32':
+        if sys.platform == "win32":
             from os import path
             import re
-            backend = usb.backend.libusb1.get_backend(find_library=lambda x: path.join(
-                path.dirname(__file__),
-                'libusb',
-                'MS' + re.search('(\d+) bit', sys.version).groups()[0],
-                'dll', 'libusb-1.0.dll'))
-        elif sys.platform.startswith('linux'):
+
+            backend = usb.backend.libusb1.get_backend(
+                find_library=lambda x: path.join(
+                    path.dirname(__file__),
+                    "libusb",
+                    "MS" + re.search(r"(\d+) bit", sys.version).groups()[0],
+                    "dll",
+                    "libusb-1.0.dll",
+                )
+            )
+        elif sys.platform.startswith("linux"):
             backend = None
         else:
-            raise NotImplementedError('%s system is not supported!')
+            raise NotImplementedError("%s system is not supported!")
 
         # get device
         for pid in self.ID_PRODUCT:
-            devs = list(usb.core.find(idVendor=self.ID_VENDOR, idProduct=pid, find_all=True, backend=backend))
+            devs = list(
+                usb.core.find(
+                    idVendor=self.ID_VENDOR,
+                    idProduct=pid,
+                    find_all=True,
+                    backend=backend,
+                )
+            )
             if devs:
-                logger.info("idVendor %d, idProduct %d" % (self.ID_VENDOR, pid))
+                logger.debug("idVendor %d, idProduct %d" % (self.ID_VENDOR, pid))
                 break
         else:
-            raise SystemError('No device found!')
+            raise SystemError("No device found!")
 
         # initial lamp and color
         self._lamp = devs[0]
-        if sys.platform.startswith('linux') and self._lamp.is_kernel_driver_active(0):
+        if sys.platform.startswith("linux") and self._lamp.is_kernel_driver_active(0):
             self._reattach = True
             self._lamp.detach_kernel_driver(0)
         else:
@@ -138,9 +151,9 @@ class USBLamp(object):
         self.error_cb = error_cb
 
         # send init cmd
-        self.send((0x1f, 0x02, 0x00, 0x2e, 0x00, 0x00, 0x2b, 0x03))
-        self.send((0x00, 0x02, 0x00, 0x2e, 0x00, 0x00, 0x2b, 0x04))
-        self.send((0x00, 0x02, 0x00, 0x2e, 0x00, 0x00, 0x2b, 0x05))
+        self.send((0x1F, 0x02, 0x00, 0x2E, 0x00, 0x00, 0x2B, 0x03))
+        self.send((0x00, 0x02, 0x00, 0x2E, 0x00, 0x00, 0x2B, 0x04))
+        self.send((0x00, 0x02, 0x00, 0x2E, 0x00, 0x00, 0x2B, 0x05))
         self.send(self._color + (0x00, 0x00, 0x00, 0x00, 0x05))
 
         # create stop event, fading task queue and daemon thread
